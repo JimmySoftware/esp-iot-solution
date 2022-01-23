@@ -13,6 +13,8 @@ menu "Board Options"
             bool "Board ESP32-LCDKit_V1.1"
         config BOARD_ESP32_MAKERFABS_32
             bool "MakerFabs ESP32 3.2in TFT Touch with Camera"
+        config BOARD_ESP32_MAKERFABS_35
+            bool "MakerFabs ESP32 3.5in TFT Touch with Camera"
     endchoice
 
     menu "Devkitc-V4 Board Options"
@@ -41,6 +43,13 @@ menu "Board Options"
 
         orsource "./esp32-makerfabs-32/Kconfig.in"
         #source "{absolute path}/esp32-makerfabs-32/Kconfig.in" # v4.0 Backwards compatibility
-    endmenu    
+    endmenu  
+    
+    menu "MakerFabs ESP32 3.5in TFT Touch with Camera"
+        visible if BOARD_ESP32_MAKERFABS_35
+
+        orsource "./esp32-makerfabs-35/Kconfig.in"
+        #source "{absolute path}/esp32-makerfabs-35/Kconfig.in" # v4.0 Backwards compatibility
+    endmenu      
 
 endmenu

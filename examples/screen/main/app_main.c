@@ -26,11 +26,10 @@ static const char *TAG = "screen example";
  * @brief Draw Mandelbrot Set on screen, A helpful site http://usefuljs.net/fractals/
  */
 
-/** If you use a spi interface screen, set the USE_SPI_SCREEN to 1, otherwise use 8080 interface. */
-#define USE_SPI_SCREEN 1
-
 #define MAX_ZOOM  2500
 #define ITERATION 128
+
+#define USE_SPI_SCREEN 1
 
 static uint16_t g_color_table[ITERATION];
 static scr_driver_t g_lcd;
@@ -102,8 +101,10 @@ static void init_CLUT(uint16_t *clut)
 
 static void screen_clear(scr_driver_t *lcd, int color)
 {
+
     scr_info_t lcd_info;
     lcd->get_info(&lcd_info);
+
     uint16_t *buffer = malloc(lcd_info.width * sizeof(uint16_t));
     if (NULL == buffer) {
         for (size_t y = 0; y < lcd_info.height; y++) {
@@ -122,6 +123,7 @@ static void screen_clear(scr_driver_t *lcd, int color)
 
         free(buffer);
     }
+    
 }
 
 static void lcd_bitmap_test(scr_driver_t *lcd)
@@ -205,7 +207,7 @@ void app_main(void)
 
     scr_interface_driver_t *iface_drv;
     scr_interface_create(SCREEN_IFACE_SPI, &spi_lcd_cfg, &iface_drv);
-    ret = scr_find_driver(SCREEN_CONTROLLER_ILI9341, &g_lcd);
+    ret = scr_find_driver(SCREEN_CONTROLLER, &g_lcd);
     if (ESP_OK != ret) {
         return;
         ESP_LOGE(TAG, "screen find failed");
@@ -219,8 +221,8 @@ void app_main(void)
         .bckl_active_level = 1,
         .offset_hor = 0,
         .offset_ver = 0,
-        .width = 240,
-        .height = 320,
+        .width = SCREEN_WIDTH,
+        .height = SCREEN_HEIGHT,
         .rotate = SCR_DIR_BTRL,
     };
     ret = g_lcd.init(&lcd_cfg);
@@ -286,18 +288,21 @@ void app_main(void)
     g_lcd.get_info(&g_lcd_info);
     ESP_LOGI(TAG, "Screen name:%s | width:%d | height:%d", g_lcd_info.name, g_lcd_info.width, g_lcd_info.height);
 
-    screen_clear(&g_lcd, COLOR_ESP_BKGD);
+    vTaskDelay(pdMS_TO_TICKS(500));
+    screen_clear(&g_lcd, 0xF800); // COLOR_ESP_BKGD);
     vTaskDelay(pdMS_TO_TICKS(500));
 
+   
     /**  Run test */
     lcd_bitmap_test(&g_lcd);
+     
     vTaskDelay(pdMS_TO_TICKS(2000));
     lcd_speed_test(&g_lcd);
     vTaskDelay(pdMS_TO_TICKS(2000));
 
-    init_CLUT(g_color_table); /** Initialize color look up table */
+    init_CLUT(g_color_table); // Initialize color look up table 
 
-    /** Define an interesting point on the complex plane */
+    // Define an interesting point on the complex plane 
     float real = -0.68481 + (g_lcd_info.width / 2 / (float)MAX_ZOOM);
     float img = 0.380584 + (g_lcd_info.height / 2 / (float)MAX_ZOOM);
 
@@ -314,7 +319,7 @@ void app_main(void)
             int32_t off_x = (real) * zoom;
             int32_t off_y = (img) * zoom;
             generate_mandelbrot(&g_lcd, g_lcd_info.width, g_lcd_info.height, g_lcd_info.width / 2 - off_x,  g_lcd_info.height / 2 - off_y, zoom, pixels);
-            vTaskDelay(1); /** Delay one tick for feed task watchdog */
+            vTaskDelay(1); // Delay one tick for feed task watchdog 
         }
         for (; zoom > 50; zoom /= 1.1f) {
             int32_t off_x = (real) * zoom;
@@ -323,4 +328,5 @@ void app_main(void)
             vTaskDelay(1);
         }
     }
+     
 }

@@ -64,6 +64,10 @@ static const char *TAG = "ILI9488";
 #define ILI9488_RAMWRCONT     0x3C
 #define ILI9488_RAMRDCONT     0x3E
 
+#define ILI9488_WR_BRIGHTNESS 0x51
+#define ILI9488_RD_BRIGHTNESS 0x52
+#define ILI9488_CTRL_DISPLAY  0x53
+
 #define ILI9488_IMCTR         0xB0
 #define ILI9488_FRMCTR1       0xB1
 #define ILI9488_FRMCTR2       0xB2
@@ -159,7 +163,7 @@ esp_err_t lcd_ili9488_init(const scr_controller_config_t *lcd_conf)
         vTaskDelay(100 / portTICK_RATE_MS);
         gpio_set_level(lcd_conf->pin_num_rst, (~(lcd_conf->rst_active_level)) & 0x1);
         vTaskDelay(100 / portTICK_RATE_MS);
-    }
+    }  
 
     g_lcd_handle.interface_drv = lcd_conf->interface_drv;
     g_lcd_handle.original_width = lcd_conf->width;
@@ -289,10 +293,13 @@ esp_err_t lcd_ili9488_set_window(uint16_t x0, uint16_t y0, uint16_t x1, uint16_t
 
 esp_err_t lcd_ili9488_write_ram_data(uint16_t color)
 {
-    static uint8_t data[2];
-    data[0] = (uint8_t)(color & 0xff);
-    data[1] = (uint8_t)(color >> 8);
-    return LCD_WRITE(data, 2);
+    static uint8_t data[3];
+    //data[0] = (uint8_t)(color & 0xff);
+    //data[1] = (uint8_t)(color >> 8);
+    data[0] = (uint8_t) (((color & 0xF800) >> 8) | ((color & 0x8000) >> 13));
+    data[1] = (uint8_t) ((color & 0x07E0) >> 3);
+    data[2] = (uint8_t) (((color & 0x001F) << 3) | ((color & 0x0010) >> 2));
+    return LCD_WRITE(data, 3);
 }
 
 esp_err_t lcd_ili9488_draw_pixel(uint16_t x, uint16_t y, uint16_t color)
@@ -305,21 +312,61 @@ esp_err_t lcd_ili9488_draw_pixel(uint16_t x, uint16_t y, uint16_t color)
     return lcd_ili9488_write_ram_data(color);
 }
 
-esp_err_t lcd_ili9488_draw_bitmap(uint16_t x, uint16_t y, uint16_t w, uint16_t h, uint16_t *bitmap)
+esp_err_t lcd_ili9488_draw_bitmap(uint16_t x, uint16_t y, uint16_t w, uint16_t hh, uint16_t *bitmap)
 {
     esp_err_t ret;
     LCD_CHECK(NULL != bitmap, "bitmap pointer invalid", ESP_ERR_INVALID_ARG);
 
-    LCD_IFACE_ACQUIRE();
-    ret = lcd_ili9488_set_window(x, y, x + w - 1, y + h - 1);
-    if (ESP_OK != ret) {
-        return ESP_FAIL;
+    int h = 128;
+    if( h > hh ) {
+        h = hh;
     }
-
     uint32_t len = w * h;
-    ret = LCD_WRITE((uint8_t *)bitmap, 2 * len);
+    uint8_t *mybuf;
+    do {
+        mybuf = (uint8_t *)heap_caps_malloc(3 * len * sizeof(uint8_t), MALLOC_CAP_DMA);
+        if (mybuf == NULL)  ESP_LOGW(TAG, "Could not allocate enough DMA memory!");
+    } while (mybuf == NULL);
+
+    int _h = 0;
+    LCD_IFACE_ACQUIRE();
+    while( _h < hh ) {
+        h = 64;
+        if( _h + h > hh ) {
+            h = hh - _h;
+        }
+
+
+        ret = lcd_ili9488_set_window(x, y, x + w - 1, y + h - 1);
+        if (ESP_OK != ret) {
+            return ESP_FAIL;
+        }
+
+        uint32_t len = w * h;
+
+        uint32_t LD = 0;
+        uint32_t j = 0;
+
+        for (uint32_t i = 0; i < len; i++) {
+            LD = bitmap[_h * w + i];
+            mybuf[j] = (uint8_t)(((LD & 0xF800) >> 8) | ((LD & 0x8000) >> 13));
+            j++;
+            mybuf[j] = (uint8_t)((LD & 0x07E0) >> 3);
+            j++;
+            mybuf[j] = (uint8_t)(((LD & 0x001F) << 3) | ((LD & 0x0010) >> 2));
+            j++;
+        }    
+
+        ret = LCD_WRITE((uint8_t *)mybuf, 3 * len);
+        LCD_CHECK(ESP_OK == ret, "lcd write ram data failed", ESP_FAIL);
+
+        //free( mybuf );
+
+        _h += h;
+        y += h;
+    }
     LCD_IFACE_RELEASE();
-    LCD_CHECK(ESP_OK == ret, "lcd write ram data failed", ESP_FAIL);
+    heap_caps_free(mybuf);
     return ESP_OK;
 }
 
@@ -327,6 +374,10 @@ static void lcd_ili9488_init_reg(void)
 {
     LCD_WRITE_CMD(ILI9488_SWRESET);
     vTaskDelay(120 / portTICK_RATE_MS);
+
+    LCD_WRITE_CMD(ILI9488_SLPOUT);      // Exit Sleep
+    vTaskDelay(120 / portTICK_RATE_MS);
+
     // positive gamma control
     LCD_WRITE_CMD(ILI9488_GMCTRP1);
     LCD_WRITE_DATA(0x00);
@@ -371,31 +422,48 @@ static void lcd_ili9488_init_reg(void)
     // Power Control 2 (VGH,VGL)
     LCD_WRITE_CMD(ILI9488_PWCTR2);
     LCD_WRITE_DATA(0x41);
+
     // Power Control 3 (Vcom)
     LCD_WRITE_CMD(ILI9488_VMCTR1);
     LCD_WRITE_DATA(0x00);
     LCD_WRITE_DATA(0x12);
     LCD_WRITE_DATA(0x80);
 
-    LCD_WRITE_CMD(ILI9488_IMCTR); LCD_WRITE_DATA(0x80); // Interface Mode Control (SDO NOT USE)
+    // Jimmy
+    LCD_WRITE_CMD(ILI9488_MADCTL);
+    LCD_WRITE_DATA((0x20 | 0x08));
 
-    LCD_WRITE_CMD(ILI9488_PIXFMT); LCD_WRITE_DATA(0x55); // Interface Pixel Format (16 bit)
+    LCD_WRITE_CMD(ILI9488_PIXFMT); 
+    LCD_WRITE_DATA(0x66); //0x55); // Interface Pixel Format (18 bit instead of 16 bit) 
 
-    LCD_WRITE_CMD(ILI9488_FRMCTR1); LCD_WRITE_DATA(0xA0); // Frame rate (60Hz)
-    LCD_WRITE_CMD(ILI9488_INVCTR); LCD_WRITE_DATA(0x02); // Display Inversion Control (2-dot)
+    LCD_WRITE_CMD(ILI9488_IMCTR); 
+    LCD_WRITE_DATA(0x00); //0x80); // Interface Mode Control (SDO NOT USE)
+
+    LCD_WRITE_CMD(ILI9488_FRMCTR1); 
+    LCD_WRITE_DATA(0xA0); // Frame rate (60Hz)
+
+    LCD_WRITE_CMD(ILI9488_INVCTR); 
+    LCD_WRITE_DATA(0x02); // Display Inversion Control (2-dot)
+
     LCD_WRITE_CMD(ILI9488_DFUNCTR); // Display Function Control RGB/MCU Interface Control
     LCD_WRITE_DATA(0x02);
     LCD_WRITE_DATA(0x02);
 
     LCD_WRITE_CMD(ILI9488_IMGFUNCT); // Set Image Functio (Disable 24 bit data)
     LCD_WRITE_DATA(0x00);
+
+    // Jimmy
+    LCD_WRITE_CMD(ILI9488_CTRL_DISPLAY);
+    LCD_WRITE_DATA(0x28);
+    LCD_WRITE_CMD(ILI9488_WR_BRIGHTNESS);
+    LCD_WRITE_DATA(0x7F);
+
     LCD_WRITE_CMD(ILI9488_ADJCTR3); // Adjust Control (D7 stream, loose)
     LCD_WRITE_DATA(0xa9);
     LCD_WRITE_DATA(0x51);
     LCD_WRITE_DATA(0x2c);
-    LCD_WRITE_DATA(0x82);
+    LCD_WRITE_DATA(0x02); //0x82);
 
-    LCD_WRITE_CMD(ILI9488_SLPOUT);      // Exit Sleep
     LCD_WRITE_CMD(ILI9488_DISPON);      // Display on
     vTaskDelay(120 / portTICK_RATE_MS);
 }

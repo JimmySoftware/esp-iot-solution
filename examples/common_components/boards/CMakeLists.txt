@@ -11,6 +11,8 @@ elseif(CONFIG_BOARD_ESP32_LCDKIT)
     set(boards_dir "esp32-lcdkit")
 elseif(CONFIG_BOARD_ESP32_MAKERFABS_32)
     set(boards_dir "esp32-makerfabs-32")
+elseif(CONFIG_BOARD_ESP32_MAKERFABS_35)
+    set(boards_dir "esp32-makerfabs-35")
 endif()
 
 message(STATUS "-----------Board Info---------")

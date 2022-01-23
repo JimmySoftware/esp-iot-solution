@@ -26,7 +26,7 @@
 typedef void* board_res_handle_t;
 
 /*Definations of Board*/
-#define BOARD_NAME "ESP32 3.2\" TFT Touch with Camera"
+#define BOARD_NAME "ESP32 3.5\" TFT Touch with Camera"
 #define BOARD_VENDOR "MakerFabs"
 #define BOARD_URL "https://www.makerfabs.com/esp32-3.2-inch-tft-touch-with-camera.html"
 
@@ -66,12 +66,12 @@ typedef enum {
 #define BOARD_LCD_SPI_CLK_PIN BOARD_IO_SPI2_SCK
 #define BOARD_LCD_SPI_CS_PIN 15
 #define BOARD_LCD_SPI_DC_PIN 33
-#define BOARD_LCD_SPI_RESET_PIN -1
+#define BOARD_LCD_SPI_RESET_PIN 26
 #define BOARD_LCD_SPI_BL_PIN -1
 
-#define SCREEN_WIDTH 240
-#define SCREEN_HEIGHT 320
-#define SCREEN_CONTROLLER SCREEN_CONTROLLER_ILI9341
+#define SCREEN_WIDTH 320
+#define SCREEN_HEIGHT 480
+#define SCREEN_CONTROLLER SCREEN_CONTROLLER_ILI9488
 
 /**< Touch panel interface pins */
 /**
